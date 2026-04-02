@@ -5,15 +5,15 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useState, useRef, useCallback } from "react";
 import * as THREE from "three";
 
-// --- Types ---
+// --- Type Definitions ---
 interface Measurements {
-  stature: number;
-  weight: number;
-  chest: number;
-  waist: number;
-  hips: number;
-  inseam: number;
-  exercise: number;
+  stature: number; // cm
+  weight: number;  // kg
+  chest: number;   // cm
+  waist: number;   // cm
+  hips: number;    // cm
+  inseam: number;  // cm
+  exercise: number; // hrs/week
 }
 
 interface BasisData {
@@ -30,72 +30,107 @@ interface BasisData {
   };
 }
 
-// --- Constants & Defaults ---
-const DEFAULTS: Measurements = {
-  stature: 175, // cm
-  weight: 70,   // kg
-  chest: 95,    // cm
-  waist: 80,    // cm
-  hips: 100,   // cm
-  inseam: 80,   // cm
-  exercise: 2,  // hrs/week
+interface GenderConfig {
+  label: string;
+  folder: string;
+  means: {
+    waist: number;
+    chest: number;
+    hips: number;
+    stature: number;
+    weightRoot: number;
+    weightKg: number;
+    inseam: number;
+    fitness: number;
+  };
+}
+
+const GENDER_CONFIGS: Record<'male' | 'female', GenderConfig> = {
+  male: {
+    label: "Male Unit",
+    folder: "male",
+    means: {
+      waist: 894.4,
+      chest: 1021.9,
+      hips: 1029.5,
+      stature: 1774.2,
+      weightRoot: 4.350045,
+      weightKg: Math.pow(4.350045, 3), // ~82.32
+      inseam: 796.15,
+      fitness: 4.559
+    }
+  },
+  female: {
+    label: "Female Unit",
+    folder: "female",
+    means: {
+      waist: 756.4,
+      chest: 928.5,
+      hips: 1023.1,
+      stature: 1642.3,
+      weightRoot: 3.997508,
+      weightKg: Math.pow(3.997508, 3), // ~63.88
+      inseam: 755.15,
+      fitness: 4.012
+    }
+  }
 };
 
-const STEPS = {
-  stature: 0.5,  // 5mm = 0.5cm
-  weight: 5,     // 5kg
-  chest: 0.5,    // 5mm
-  waist: 0.5,    // 5mm
-  hips: 0.5,     // 5mm
-  inseam: 0.5,   // 5mm
-  exercise: 5,   // 5 hours
-};
-
-// Loading fallback
+// --- Loading Component ---
 function Loader({ progress }: { progress: string }) {
   return (
-    <div className="flex items-center justify-center h-full bg-[#0a0a0a]">
+    <div className="flex items-center justify-center h-full bg-[#0a0a0a] z-50">
       <div className="flex flex-col items-center gap-6">
-        <div className="relative w-20 h-20">
-          <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="relative w-24 h-24">
+          <div className="absolute inset-0 border-[1px] border-blue-500/10 rounded-full"></div>
+          <div className="absolute inset-0 border-t-[1px] border-blue-500 rounded-full animate-spin"></div>
+          <div className="absolute inset-4 border-[1px] border-blue-500/5 rounded-full animate-pulse"></div>
         </div>
-        <div className="flex flex-col items-center gap-2">
-          <div className="text-white text-xl font-bold tracking-tight">Initializing Persona</div>
-          <div className="text-neutral-500 text-sm font-mono uppercase tracking-widest">{progress}</div>
+        <div className="flex flex-col items-center gap-1">
+          <div className="text-white/40 text-[9px] font-black uppercase tracking-[0.4em] mb-1">Synthesizing Asset</div>
+          <div className="text-neutral-600 text-[10px] font-mono uppercase tracking-widest">{progress}</div>
         </div>
       </div>
     </div>
   );
 }
 
-// --- 3D Components ---
-
-function DeformedMesh({ 
-  basis, 
-  measurements, 
-  wireframe 
-}: { 
-  basis: BasisData, 
-  measurements: Measurements, 
-  wireframe: boolean 
+// --- 3D Deformation Engine ---
+function DeformedMesh({
+  basis,
+  measurements,
+  gender,
+  wireframe
+}: {
+  basis: BasisData,
+  measurements: Measurements,
+  gender: 'male' | 'female',
+  wireframe: boolean
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  
-  // Calculate weights for each basis
-  const weights = useMemo(() => {
-    return {
-      stature: (measurements.stature - DEFAULTS.stature) / STEPS.stature,
-      weight: (measurements.weight - DEFAULTS.weight) / STEPS.weight,
-      chest: (measurements.chest - DEFAULTS.chest) / STEPS.chest,
-      waist: (measurements.waist - DEFAULTS.waist) / STEPS.waist,
-      hips: (measurements.hips - DEFAULTS.hips) / STEPS.hips,
-      inseam: (measurements.inseam - DEFAULTS.inseam) / STEPS.inseam,
-      exercise: (measurements.exercise - DEFAULTS.exercise) / STEPS.exercise,
-    };
-  }, [measurements]);
+  const config = GENDER_CONFIGS[gender];
 
-  // Compute final vertices
+  // Calculate weights for each basis using normalized SMPL stepping (per 5mm / 5kg)
+  const weights = useMemo(() => {
+    const m = measurements;
+    const g = config.means;
+
+    // Weight is non-linear (cube root space)
+    const targetRoot = Math.pow(m.weight, 1 / 3);
+    const weightStep = Math.pow(g.weightKg + 5, 1 / 3) - g.weightRoot;
+
+    return {
+      stature: (m.stature * 10 - g.stature) / 5,
+      weight: (targetRoot - g.weightRoot) / weightStep,
+      chest: (m.chest * 10 - g.chest) / 5,
+      waist: (m.waist * 10 - g.waist) / 5,
+      hips: (m.hips * 10 - g.hips) / 5,
+      inseam: (m.inseam * 10 - g.inseam) / 5,
+      exercise: (m.exercise - g.fitness) / 5, // already in hours
+    };
+  }, [measurements, config]);
+
+  // Compute final vertices based on linear combination of diffs
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
     const vertexCount = basis.mean.length;
@@ -111,7 +146,7 @@ function DeformedMesh({
       const dI = basis.diffs.inseam[i];
       const dE = basis.diffs.exercise[i];
 
-      // P = Mean + Sum(weight * diff)
+      // P = Mean + Sum(weight_i * Basis_i)
       positions[i * 3 + 0] = m[0] + (weights.stature * dS[0]) + (weights.weight * dW[0]) + (weights.chest * dC[0]) + (weights.waist * dWa[0]) + (weights.hips * dH[0]) + (weights.inseam * dI[0]) + (weights.exercise * dE[0]);
       positions[i * 3 + 1] = m[1] + (weights.stature * dS[1]) + (weights.weight * dW[1]) + (weights.chest * dC[1]) + (weights.waist * dWa[1]) + (weights.hips * dH[1]) + (weights.inseam * dI[1]) + (weights.exercise * dE[1]);
       positions[i * 3 + 2] = m[2] + (weights.stature * dS[2]) + (weights.weight * dW[2]) + (weights.chest * dC[2]) + (weights.waist * dWa[2]) + (weights.hips * dH[2]) + (weights.inseam * dI[2]) + (weights.exercise * dE[2]);
@@ -123,19 +158,18 @@ function DeformedMesh({
     return geo;
   }, [basis, weights]);
 
-  // Gentle rotation
   useFrame((state) => {
     if (meshRef.current) {
-      meshRef.current.rotation.y = Math.sin(state.clock.getElapsedTime() * 0.2) * 0.1;
+      meshRef.current.rotation.y = Math.sin(state.clock.getElapsedTime() * 0.15) * 0.05;
     }
   });
 
   return (
     <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial 
-        color="#81a1c1" 
-        roughness={0.4} 
-        metalness={0.2} 
+      <meshStandardMaterial
+        color="#81a1c1"
+        roughness={0.4}
+        metalness={0.25}
         wireframe={wireframe}
         side={THREE.DoubleSide}
       />
@@ -143,24 +177,30 @@ function DeformedMesh({
   );
 }
 
-// --- Main UI Component ---
-
-export default function CharacterView06() {
+// --- Main Application Component ---
+export default function CharacterView08() {
+  const [gender, setGender] = useState<'male' | 'female'>('male');
   const [basis, setBasis] = useState<BasisData | null>(null);
-  const [loadingStep, setLoadingStep] = useState("fetching data...");
-  const [measurements, setMeasurements] = useState<Measurements>(DEFAULTS);
+  const [measurements, setMeasurements] = useState<Measurements>({
+    stature: 177,
+    weight: 82,
+    chest: 102,
+    waist: 89,
+    hips: 103,
+    inseam: 80,
+    exercise: 4,
+  });
+  const [units, setUnits] = useState<'metric' | 'imperial'>('imperial');
   const [wireframe, setWireframe] = useState(false);
-  const [units, setUnits] = useState<'metric' | 'imperial'>('metric');
+  const [loadingStep, setLoadingStep] = useState("Initializing Engine...");
   const [error, setError] = useState<string | null>(null);
 
   // Helper to load and parse a basis script
-  const fetchBasis = async (url: string, varName: string) => {
+  const fetchBasis = useCallback(async (url: string, varName: string) => {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch ${url}`);
     const text = await res.text();
-    
-    // Create a robust execution context
-    // We provide all possible globals to avoid ReferenceErrors
+
     const context = {
       model_loader: { create_mesh: () => null },
       name: "",
@@ -185,57 +225,85 @@ export default function CharacterView06() {
       console.error(`Error parsing ${varName} from ${url}:`, e);
       throw e;
     }
-  };
+  }, []);
 
   useEffect(() => {
+    const config = GENDER_CONFIGS[gender];
+    const root = `/script/${config.folder}`;
+
     const loadAll = async () => {
+      setBasis(null);
+      setError(null);
       try {
-        setLoadingStep("mean shape");
-        const mean = await fetchBasis('/script/mean.js', 'mean_vertices');
-        
-        // Extract faces specifically from mean.js
-        const resMean = await fetch('/script/mean.js');
+        setLoadingStep("Mean Topology");
+        const mean = await fetchBasis(`${root}/mean.js`, 'mean_vertices');
+
+        const resMean = await fetch(`${root}/mean.js`);
         const textMean = await resMean.text();
         const faces = new Function('mean_faces', 'model_loader', 'mean_vertices', 'name', `
           ${textMean};
           return mean_faces;
         `)([], { create_mesh: () => null }, [], "") as number[][];
 
-        const loadDiff = async (url: string, varName: string, label: string) => {
+        const loadDiff = async (filename: string, varName: string, label: string) => {
           setLoadingStep(label);
-          const b = await fetchBasis(url, varName);
+          const b = await fetchBasis(`${root}/${filename}.js`, varName);
           return b.map((v, i) => [v[0] - mean[i][0], v[1] - mean[i][1], v[2] - mean[i][2]]);
         };
 
         const diffs = {
-          stature: await loadDiff('/script/stature_plus_5mm.js', 'stature_plus_5mm_vertices', 'height data'),
-          weight: await loadDiff('/script/weight_cube_root_plus_5kg.js', 'weight_cube_root_plus_5kg_vertices', 'weight data'),
-          chest: await loadDiff('/script/chest_circumference_plus_5mm.js', 'chest_circumference_plus_5mm_vertices', 'chest data'),
-          waist: await loadDiff('/script/waist_circumference_pref_plus_5mm.js', 'waist_circumference_pref_plus_5mm_vertices', 'waist data'),
-          hips: await loadDiff('/script/hip_circumference_maximum_plus_5mm.js', 'hip_circumference_maximum_plus_5mm_vertices', 'hip data'),
-          inseam: await loadDiff('/script/inseam_right_plus_5mm.js', 'inseam_right_plus_5mm_vertices', 'inseam data'),
-          exercise: await loadDiff('/script/fitness_plus_5hours.js', 'fitness_plus_5hours_vertices', 'fitness data'),
+          stature: await loadDiff('stature_plus_5mm', 'stature_plus_5mm_vertices', 'Stature Basis'),
+          weight: await loadDiff('weight_cube_root_plus_5kg', 'weight_cube_root_plus_5kg_vertices', 'Mass Basis'),
+          chest: await loadDiff('chest_circumference_plus_5mm', 'chest_circumference_plus_5mm_vertices', 'Chest Basis'),
+          waist: await loadDiff('waist_circumference_pref_plus_5mm', 'waist_circumference_pref_plus_5mm_vertices', 'Waist Basis'),
+          hips: await loadDiff('hip_circumference_maximum_plus_5mm', 'hip_circumference_maximum_plus_5mm_vertices', 'Hips Basis'),
+          inseam: await loadDiff('inseam_right_plus_5mm', 'inseam_right_plus_5mm_vertices', 'Inseam Basis'),
+          exercise: await loadDiff('fitness_plus_5hours', 'fitness_plus_5hours_vertices', 'Fitness Basis'),
         };
 
         setBasis({ mean, faces, diffs });
       } catch (err) {
         console.error("Initialization Failed:", err);
-        setError("Incompatible or missing geometry scripts. Ensure /public/script/ files are SMPL standard.");
+        setError("Failed to load geometry engine. Please verify script availability.");
       }
     };
     loadAll();
-  }, []);
+  }, [gender, fetchBasis]);
 
   const handleUpdate = (key: keyof Measurements, val: number) => {
     setMeasurements(prev => ({ ...prev, [key]: val }));
   };
 
-  const resetAll = () => setMeasurements(DEFAULTS);
+  const resetAll = () => {
+    const config = GENDER_CONFIGS[gender].means;
+    setMeasurements({
+      stature: Math.round(config.stature / 10),
+      weight: Math.round(config.weightKg),
+      chest: Math.round(config.chest / 10),
+      waist: Math.round(config.waist / 10),
+      hips: Math.round(config.hips / 10),
+      inseam: Math.round(config.inseam / 10),
+      exercise: Math.round(config.fitness),
+    });
+  };
 
-  // Conversion helpers
+  // BMI Calculation
+  const bmi = useMemo(() => {
+    const hMeter = measurements.stature / 100;
+    return measurements.weight / (hMeter * hMeter);
+  }, [measurements]);
+
+  const bmiStatus = useMemo(() => {
+    if (bmi < 18.5) return { label: "Underweight", color: "#60a5fa" };
+    if (bmi < 25) return { label: "Standard", color: "#10b981" };
+    if (bmi < 30) return { label: "Overweight", color: "#fbbf24" };
+    return { label: "Obese", color: "#ef4444" };
+  }, [bmi]);
+
+  // Conversion for display
   const toDisplay = (val: number, type: 'cm' | 'kg' | 'hr') => {
     if (units === 'metric') return { val: val.toFixed(type === 'hr' ? 0 : 1), unit: type };
-    if (type === 'cm') return { val: (val / 2.54).toFixed(1), unit: 'in' };
+    if (type === 'cm') return { val: (val / 2.54).toFixed(0), unit: 'in' };
     if (type === 'kg') return { val: (val * 2.20462).toFixed(0), unit: 'lb' };
     return { val, unit: type };
   };
@@ -255,7 +323,7 @@ export default function CharacterView06() {
 
   return (
     <div className="flex-1 flex h-screen bg-[#070707] overflow-hidden font-sans">
-      
+
       {/* 3D Viewer Area (Left, 60-70%) */}
       <div className="flex-[3] relative overflow-hidden">
         {/* Branding Overlay */}
@@ -275,7 +343,7 @@ export default function CharacterView06() {
           <div className="flex flex-col gap-1">
             <span className="text-neutral-700 text-[8px] font-mono uppercase tracking-widest">Mesh Stability</span>
             <div className="flex gap-0.5">
-              {[1,1,1,1,1,1,1,0,0,0].map((v, i) => <div key={i} className={`w-1.5 h-3 ${v ? 'bg-blue-500/40' : 'bg-white/5'}`}></div>)}
+              {[1, 1, 1, 1, 1, 1, 1, 0, 0, 0].map((v, i) => <div key={i} className={`w-1.5 h-3 ${v ? 'bg-blue-500/40' : 'bg-white/5'}`}></div>)}
             </div>
           </div>
           <div className="flex flex-col gap-1">
@@ -286,35 +354,35 @@ export default function CharacterView06() {
 
         <Canvas shadows gl={{ antialias: true, alpha: true }}>
           <PerspectiveCamera makeDefault position={[0, 1.4, 3.5]} fov={30} />
-          
+
           <ambientLight intensity={0.5} />
           <spotLight position={[5, 10, 5]} angle={0.3} penumbra={1} intensity={3} castShadow />
           <pointLight position={[-5, 2, -5]} intensity={1.5} color="#4c6ef5" />
           <pointLight position={[5, -2, 5]} intensity={0.5} color="#ffffff" />
-          
+
           <Suspense fallback={null}>
             <group position={[0, -0.6, 0]}>
-              <DeformedMesh basis={basis} measurements={measurements} wireframe={wireframe} />
+              <DeformedMesh basis={basis} measurements={measurements} wireframe={wireframe} gender="male" />
               <ContactShadows opacity={0.6} scale={6} blur={2} far={1.5} />
             </group>
-            
+
             <Environment preset="city" />
-            
-            <Grid 
-              infiniteGrid 
-              fadeDistance={8} 
-              cellColor="#111" 
-              sectionColor="#1a1a1a" 
-              sectionSize={1} 
+
+            <Grid
+              infiniteGrid
+              fadeDistance={8}
+              cellColor="#111"
+              sectionColor="#1a1a1a"
+              sectionSize={1}
               cellSize={0.2}
               position={[0, -0.6, 0]}
             />
           </Suspense>
-          
-          <OrbitControls 
-            enableDamping 
-            dampingFactor={0.05} 
-            maxPolarAngle={Math.PI / 1.7} 
+
+          <OrbitControls
+            enableDamping
+            dampingFactor={0.05}
+            maxPolarAngle={Math.PI / 1.7}
             target={[0, 0.8, 0]}
             minDistance={1.8}
             maxDistance={6}
@@ -324,12 +392,12 @@ export default function CharacterView06() {
 
       {/* Control Sidebar (Right, 30-40%) */}
       <div className="flex-[1.8] min-w-[400px] flex flex-col bg-[#0f0f0f] border-l border-white/5 shadow-[-50px_0_100px_rgba(0,0,0,0.5)] z-20">
-        
+
         {/* Sidebar Header */}
         <div className="p-10 pb-6">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em]">Parameter Interface</h2>
-            <button 
+            <button
               onClick={() => setUnits(u => u === 'metric' ? 'imperial' : 'metric')}
               className="px-3 py-1 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-neutral-400 hover:text-white rounded-full transition-all"
             >
@@ -337,16 +405,16 @@ export default function CharacterView06() {
             </button>
           </div>
           <div className="flex items-end justify-between">
-             <h3 className="text-white text-2xl font-bold tracking-tight">Anatomy <span className="text-neutral-600 font-normal ml-1 italic font-serif">Setup</span></h3>
-             <span className="text-neutral-500 text-[10px] uppercase font-mono tracking-tighter">Instance ID: TR-449</span>
+            <h3 className="text-white text-2xl font-bold tracking-tight">Anatomy <span className="text-neutral-600 font-normal ml-1 italic font-serif">Setup</span></h3>
+            <span className="text-neutral-500 text-[10px] uppercase font-mono tracking-tighter">Instance ID: TR-449</span>
           </div>
         </div>
 
         {/* Sliders Container */}
         <div className="flex-1 overflow-y-auto px-10 py-6 custom-scrollbar space-y-10">
-          <SliderField 
-            label="Stature / Height" 
-            value={measurements.stature} 
+          <SliderField
+            label="Stature / Height"
+            value={measurements.stature}
             min={140} max={210} step={1}
             display={toDisplay(measurements.stature, 'cm')}
             onChange={(v) => handleUpdate('stature', v)}
@@ -354,54 +422,54 @@ export default function CharacterView06() {
             description="The overall height of the biological asset."
           />
 
-          <SliderField 
-            label="Biological Mass" 
-            value={measurements.weight} 
+          <SliderField
+            label="Biological Mass"
+            value={measurements.weight}
             min={40} max={160} step={1}
             display={toDisplay(measurements.weight, 'kg')}
             onChange={(v) => handleUpdate('weight', v)}
             description="Total body mass indexed by volumetric calculation."
           />
 
-          <SliderField 
-            label="Chest Expansion" 
-            value={measurements.chest} 
+          <SliderField
+            label="Chest Expansion"
+            value={measurements.chest}
             min={70} max={140} step={1}
             display={toDisplay(measurements.chest, 'cm')}
             onChange={(v) => handleUpdate('chest', v)}
             description="Circumference measured at the sternum."
           />
 
-          <SliderField 
-            label="Waist Definition" 
-            value={measurements.waist} 
+          <SliderField
+            label="Waist Definition"
+            value={measurements.waist}
             min={50} max={130} step={1}
             display={toDisplay(measurements.waist, 'cm')}
             onChange={(v) => handleUpdate('waist', v)}
             description="Mid-section transverse measurement (umbilicus)."
           />
 
-          <SliderField 
-            label="Pelvic Width" 
-            value={measurements.hips} 
+          <SliderField
+            label="Pelvic Width"
+            value={measurements.hips}
             min={70} max={150} step={1}
             display={toDisplay(measurements.hips, 'cm')}
             onChange={(v) => handleUpdate('hips', v)}
             description="Maximum hip circumference."
           />
 
-          <SliderField 
-            label="Limb Length" 
-            value={measurements.inseam} 
+          <SliderField
+            label="Limb Length"
+            value={measurements.inseam}
             min={50} max={110} step={1}
             display={toDisplay(measurements.inseam, 'cm')}
             onChange={(v) => handleUpdate('inseam', v)}
             description="Inner leg length from crotch to floor."
           />
 
-          <SliderField 
-            label="Conditioning Level" 
-            value={measurements.exercise} 
+          <SliderField
+            label="Conditioning Level"
+            value={measurements.exercise}
             min={0} max={20} step={1}
             display={toDisplay(measurements.exercise, 'hr')}
             onChange={(v) => handleUpdate('exercise', v)}
@@ -412,22 +480,21 @@ export default function CharacterView06() {
         {/* Global Controls */}
         <div className="p-10 pt-6 border-t border-white/5 bg-black/20 flex flex-col gap-4">
           <div className="flex gap-4">
-            <button 
+            <button
               onClick={() => setWireframe(!wireframe)}
-              className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all border ${
-                wireframe ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_40px_rgba(37,99,235,0.3)]" : "bg-neutral-900 border-white/10 text-neutral-400 hover:text-white"
-              }`}
+              className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all border ${wireframe ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_40px_rgba(37,99,235,0.3)]" : "bg-neutral-900 border-white/10 text-neutral-400 hover:text-white"
+                }`}
             >
               {wireframe ? "Solid State" : "Wireframe View"}
             </button>
-            <button 
+            <button
               onClick={resetAll}
               className="flex-1 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white transition-all hover:bg-red-500/10 hover:border-red-500/20"
             >
               Reset All
             </button>
           </div>
-          
+
           <button className="w-full py-5 bg-white text-black rounded-2xl text-xs font-black uppercase tracking-[0.2em] hover:bg-neutral-200 transition-all active:scale-[0.98]">
             Finalize Persona Build
           </button>
@@ -448,22 +515,22 @@ export default function CharacterView06() {
 
 // --- UI Sub-components ---
 
-function SliderField({ 
-  label, 
-  value, 
-  min, 
-  max, 
-  step, 
-  display, 
+function SliderField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  display,
   onChange,
   isSet = false,
   description
-}: { 
-  label: string, 
-  value: number, 
-  min: number, 
-  max: number, 
-  step: number, 
+}: {
+  label: string,
+  value: number,
+  min: number,
+  max: number,
+  step: number,
   display: { val: any, unit: string },
   onChange: (v: number) => void,
   isSet?: boolean,
@@ -480,12 +547,11 @@ function SliderField({
             <span className="text-neutral-600 text-[10px] font-bold uppercase">{display.unit}</span>
           </div>
         </div>
-        
+
         <div className="flex flex-col items-end gap-1 mb-1">
           <div className="flex items-center gap-1.5">
-            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${
-              isSet ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-mono tracking-tighter'
-            }`}>
+            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${isSet ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-mono tracking-tighter'
+              }`}>
               {isSet ? 'SET' : 'PREDICTED'}
             </span>
             <div className="w-4 h-4 rounded-full border border-white/5 flex items-center justify-center text-[8px] text-neutral-600 cursor-help hover:text-white transition-colors">?</div>
@@ -497,33 +563,32 @@ function SliderField({
       <div className="max-h-0 opacity-0 group-hover:max-h-10 group-hover:opacity-100 transition-all duration-300 overflow-hidden mb-4">
         <p className="text-[9px] text-neutral-500 italic max-w-[80%] leading-relaxed">{description}</p>
       </div>
-      
+
       {/* Visual Slider */}
       <div className="relative h-6 flex items-center">
         {/* Track Background */}
         <div className="absolute h-[3px] w-full bg-neutral-900 rounded-full overflow-hidden">
           {/* Active Fill */}
-          <div 
-            className={`h-full transition-all duration-100 ${
-              isSet ? 'bg-red-500' : 'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-            }`}
+          <div
+            className={`h-full transition-all duration-100 ${isSet ? 'bg-red-500' : 'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]'
+              }`}
             style={{ width: `${((value - min) / (max - min)) * 100}%` }}
           />
         </div>
-        
+
         {/* Invisible Range Input */}
-        <input 
-          type="range" 
-          min={min} 
-          max={max} 
-          step={step} 
-          value={value} 
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
           onChange={(e) => onChange(parseFloat(e.target.value))}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
         />
-        
+
         {/* Custom Thumb */}
-        <div 
+        <div
           className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.3)] pointer-events-none border-[3px] border-[#0f0f0f] group-hover:scale-150 transition-transform duration-200"
           style={{ left: `calc(${((value - min) / (max - min)) * 100}% - 8px)` }}
         />

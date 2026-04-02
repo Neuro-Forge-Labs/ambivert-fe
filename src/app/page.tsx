@@ -4,6 +4,8 @@ import CharacterView03 from "./_components/CharacterView03";
 import CharacterView04 from "./_components/CharacterView04";
 import CharacterView05 from "./_components/CharacterView05";
 import CharacterView06 from "./_components/CharacterView06";
+import CharacterView08 from "./_components/CharacterView08";
+import CharacterView09 from "./_components/CharacterView09";
 
 export default function Home() {
   return (
@@ -13,7 +15,9 @@ export default function Home() {
       {/* <CharacterView03 /> */}
       {/* <CharacterView04 /> */}
       {/* <CharacterView05 /> */}
-      <CharacterView06 />
+      {/* <CharacterView06 /> */}
+      {/* <CharacterView08 /> */}
+      <CharacterView09 />
     </div>
   );
 }
