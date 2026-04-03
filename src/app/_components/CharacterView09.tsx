@@ -99,10 +99,12 @@ function DeformedMesh({
   basis,
   measurements,
   gender,
+  modelHue,
 }: {
   basis: BasisData,
   measurements: Measurements,
   gender: 'male' | 'female',
+  modelHue: number,
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const config = GENDER_CONFIGS[gender];
@@ -159,7 +161,7 @@ function DeformedMesh({
   return (
     <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
       <meshStandardMaterial
-        color="#a3b8cc"
+        color={new THREE.Color(`hsl(${modelHue}, 29%, 72%)`)}
         roughness={0.6}
         metalness={0.1}
         side={THREE.DoubleSide}
@@ -173,6 +175,7 @@ function DeformedMesh({
 export default function CharacterView09() {
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [basis, setBasis] = useState<BasisData | null>(null);
+  const [modelHue, setModelHue] = useState<number>(209);
 
   // Default values matching the image
   const defaultMeasurements: Measurements = {
@@ -271,6 +274,7 @@ export default function CharacterView09() {
 
   const resetAll = () => {
     setMeasurements(defaultMeasurements);
+    setModelHue(209);
   };
 
   // BMI Calculation
@@ -342,7 +346,7 @@ export default function CharacterView09() {
 
             <Suspense fallback={null}>
               <group position={[0, 0, 0]} scale={0.7}>
-                <DeformedMesh basis={basis} measurements={measurements} gender={gender} />
+                <DeformedMesh basis={basis} measurements={measurements} gender={gender} modelHue={modelHue} />
               </group>
               <Environment preset="city" />
             </Suspense>
@@ -461,6 +465,37 @@ export default function CharacterView09() {
               display={toDisplay(measurements.exercise, 'hr')}
               onChange={(v) => handleUpdate('exercise', v)}
             />
+
+            {/* Color Hue Slider */}
+            <div className="w-full flex flex-col pt-2 pb-2">
+              <div className="relative h-6 flex items-center group cursor-pointer w-[96%] mx-auto">
+                {/* Track Background */}
+                <div 
+                  className="absolute h-2.5 w-full rounded-sm overflow-hidden" 
+                  style={{ 
+                    background: 'linear-gradient(to right, hsl(0, 29%, 72%), hsl(60, 29%, 72%), hsl(120, 29%, 72%), hsl(180, 29%, 72%), hsl(240, 29%, 72%), hsl(300, 29%, 72%), hsl(360, 29%, 72%))' 
+                  }}
+                ></div>
+                {/* Invisible Range Input */}
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={1}
+                  value={modelHue}
+                  onChange={(e) => setModelHue(parseFloat(e.target.value))}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
+                />
+                {/* Custom Thumb */}
+                <div
+                  className="absolute w-5 h-5 rounded-[4px] shadow-sm pointer-events-none group-hover:scale-110 transition-transform origin-center border-[1.5px] border-[#0f0f0f]"
+                  style={{ 
+                    left: `calc(${(modelHue / 360) * 100}% - 10px)`,
+                    backgroundColor: `hsl(${modelHue}, 29%, 72%)`
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Bottom Controls */}
