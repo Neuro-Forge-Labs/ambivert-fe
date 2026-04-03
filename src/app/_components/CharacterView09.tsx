@@ -3,6 +3,7 @@
 import { OrbitControls, PerspectiveCamera, Environment, Grid, ContactShadows } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import * as THREE from "three";
 import { Ruler, Weight, Heart, Pencil, MoveHorizontal, Baseline, Activity, Camera, Share2, Plus, Sliders, X } from "lucide-react";
 
@@ -398,6 +399,15 @@ function DeformedMesh({
 
 // --- Main Application Component ---
 export default function CharacterView09() {
+  return (
+    <Suspense fallback={<div className="h-full w-full bg-[#050505] flex items-center justify-center text-white">Initializing Viewer...</div>}>
+      <CharacterViewerContent />
+    </Suspense>
+  );
+}
+
+function CharacterViewerContent() {
+  const searchParams = useSearchParams();
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [basis, setBasis] = useState<BasisData | null>(null);
   const [modelHue, setModelHue] = useState<number>(209);
@@ -418,6 +428,52 @@ export default function CharacterView09() {
   const [units, setUnits] = useState<'metric' | 'imperial'>('metric');
   const [loadingStep, setLoadingStep] = useState("Initializing");
   const [error, setError] = useState<string | null>(null);
+
+  // Initialize from Query Params
+  useEffect(() => {
+    if (!searchParams) return;
+
+    const g = searchParams.get('gender');
+    if (g === 'male' || g === 'female') setGender(g);
+
+    const u = searchParams.get('units');
+    if (u === 'metric' || u === 'imperial') setUnits(u);
+
+    const c = searchParams.get('color');
+    if (c) {
+      const hue = parseInt(c);
+      if (!isNaN(hue)) setModelHue(Math.max(0, Math.min(360, hue)));
+    }
+
+    const updatedMeasurements = { ...defaultMeasurements };
+    let hasChanges = false;
+
+    const paramMap: Record<string, keyof Measurements> = {
+      height: 'stature',
+      stature: 'stature',
+      weight: 'weight',
+      chest: 'chest',
+      waist: 'waist',
+      hips: 'hips',
+      inseam: 'inseam',
+      exercise: 'exercise'
+    };
+
+    Object.entries(paramMap).forEach(([param, key]) => {
+      const val = searchParams.get(param);
+      if (val) {
+        const num = parseFloat(val);
+        if (!isNaN(num)) {
+          updatedMeasurements[key] = num;
+          hasChanges = true;
+        }
+      }
+    });
+
+    if (hasChanges) {
+      setMeasurements(updatedMeasurements);
+    }
+  }, [searchParams]);
 
   // Helper to load and parse a basis script
   const fetchBasis = useCallback(async (url: string, varName: string) => {
