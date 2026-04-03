@@ -4,7 +4,7 @@ import { OrbitControls, PerspectiveCamera, Environment, Grid, ContactShadows } f
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useState, useRef, useCallback } from "react";
 import * as THREE from "three";
-import { Ruler, Weight, Heart, Pencil, MoveHorizontal, Baseline, Activity, Camera, Share2, Plus } from "lucide-react";
+import { Ruler, Weight, Heart, Pencil, MoveHorizontal, Baseline, Activity, Camera, Share2, Plus, Sliders, X } from "lucide-react";
 
 // --- Type Definitions ---
 interface Measurements {
@@ -77,7 +77,8 @@ const GENDER_CONFIGS: Record<'male' | 'female', GenderConfig> = {
   }
 };
 
-// --- Loading Component ---
+// --- UI Sub-components ---
+
 function Loader({ progress }: { progress: string }) {
   return (
     <div className="flex items-center justify-center h-full bg-[#050505] z-50">
@@ -88,6 +89,236 @@ function Loader({ progress }: { progress: string }) {
         </div>
         <div className="flex flex-col items-center gap-1 text-white text-sm">
           Loading {progress}...
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SliderField({
+  icon,
+  label,
+  value,
+  min,
+  max,
+  step,
+  display,
+  onChange,
+}: {
+  icon: React.ReactNode,
+  label: string,
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+  display: { val: any, unit: string },
+  onChange: (v: number) => void,
+}) {
+  return (
+    <div className="w-full flex flex-col">
+      <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-3 text-[#9CA3AF]">
+          {icon}
+          <span className="text-[13px] font-medium">{label}</span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-white text-sm font-bold">{display.val}</span>
+          <span className="text-[#6B7280] text-[10px]">{display.unit}</span>
+        </div>
+      </div>
+
+      <div className="relative h-4 flex items-center group cursor-pointer w-[96%] mx-auto">
+        <div className="absolute h-1 w-full bg-[#1b1b1b] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-white transition-transform origin-left"
+            style={{ transform: `scaleX(${(value - min) / (max - min)})` }}
+          />
+        </div>
+
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
+        />
+
+        <div
+          className="absolute w-[18px] h-[18px] bg-white rounded-full shadow-md pointer-events-none group-hover:scale-110 transition-transform origin-center"
+          style={{ left: `calc(${((value - min) / (max - min)) * 100}% - 9px)` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// --- Reusable Controls Content ---
+function ControlsContent({
+  gender, setGender,
+  units, setUnits,
+  measurements, handleUpdate,
+  toDisplay,
+  modelHue, setModelHue,
+  resetAll,
+  bmi, bmiStatusLabel, bmiPercentage,
+  isMobile = false
+}: any) {
+  return (
+    <div className={`flex flex-col h-full ${!isMobile ? 'p-6' : 'pt-4'}`}>
+      {/* Gender Toggle */}
+      <div className="w-full bg-[#171717] rounded-xl p-1 mb-6 flex shrink-0">
+        {(['female', 'male'] as const).map((g) => (
+          <button
+            key={g}
+            onClick={() => setGender(g)}
+            className={`flex-1 text-center py-2 text-sm font-medium rounded-lg transition-colors ${gender === g ? 'bg-[#2a2a2a] text-white shadow-sm' : 'text-[#6B7280] hover:text-[#9CA3AF]'}`}
+          >
+            {g.charAt(0).toUpperCase() + g.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Units Toggle */}
+      <div className="flex items-center mb-8 gap-4 px-1 shrink-0">
+        <div className="bg-[#171717] rounded-full p-1 flex items-center">
+          {(['imperial', 'metric'] as const).map((u) => (
+            <button
+              key={u}
+              onClick={() => setUnits(u)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize ${units === u ? 'bg-[#2a2a2a] text-white' : 'text-[#6B7280] hover:text-[#9CA3AF]'}`}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Sliders Container */}
+      <div className="flex-1 space-y-7 pb-4">
+        <SliderField
+          icon={<Ruler size={16} strokeWidth={2} />}
+          label="Height"
+          value={measurements.stature}
+          min={140} max={210} step={1}
+          display={toDisplay(measurements.stature, 'cm')}
+          onChange={(v) => handleUpdate('stature', v)}
+        />
+
+        <SliderField
+          icon={<Weight size={16} strokeWidth={2} />}
+          label="Weight"
+          value={measurements.weight}
+          min={40} max={160} step={1}
+          display={toDisplay(measurements.weight, 'kg')}
+          onChange={(v) => handleUpdate('weight', v)}
+        />
+
+        <SliderField
+          icon={<Heart size={16} strokeWidth={2} />}
+          label="Chest"
+          value={measurements.chest}
+          min={70} max={140} step={1}
+          display={toDisplay(measurements.chest, 'cm')}
+          onChange={(v) => handleUpdate('chest', v)}
+        />
+
+        <SliderField
+          icon={<Pencil size={16} strokeWidth={2} />}
+          label="Waist"
+          value={measurements.waist}
+          min={50} max={130} step={1}
+          display={toDisplay(measurements.waist, 'cm')}
+          onChange={(v) => handleUpdate('waist', v)}
+        />
+
+        <SliderField
+          icon={<MoveHorizontal size={16} strokeWidth={2} />}
+          label="Hips"
+          value={measurements.hips}
+          min={70} max={150} step={1}
+          display={toDisplay(measurements.hips, 'cm')}
+          onChange={(v) => handleUpdate('hips', v)}
+        />
+
+        <SliderField
+          icon={<Baseline size={16} strokeWidth={2} />}
+          label="Inseam"
+          value={measurements.inseam}
+          min={50} max={110} step={1}
+          display={toDisplay(measurements.inseam, 'cm')}
+          onChange={(v) => handleUpdate('inseam', v)}
+        />
+
+        <SliderField
+          icon={<Activity size={16} strokeWidth={2} />}
+          label="Exercise"
+          value={measurements.exercise}
+          min={0} max={20} step={1}
+          display={toDisplay(measurements.exercise, 'hr')}
+          onChange={(v) => handleUpdate('exercise', v)}
+        />
+
+        {/* Color Hue Slider Overlay */}
+        <div className="w-full flex flex-col pt-2 pb-2">
+          <div className="relative h-6 flex items-center group cursor-pointer w-[96%] mx-auto">
+            <div className="absolute h-2.5 w-full rounded-sm overflow-hidden"
+              style={{ background: 'linear-gradient(to right, hsl(0, 29%, 72%), hsl(60, 29%, 72%), hsl(120, 29%, 72%), hsl(180, 29%, 72%), hsl(240, 29%, 72%), hsl(300, 29%, 72%), hsl(360, 29%, 72%))' }}
+            ></div>
+            <input type="range" min={0} max={360} step={1} value={modelHue} onChange={(e) => setModelHue(parseFloat(e.target.value))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10" />
+            <div className="absolute w-5 h-5 rounded-[4px] shadow-sm pointer-events-none group-hover:scale-110 transition-transform origin-center border-[1.5px] border-[#0f0f0f]"
+              style={{ left: `calc(${(modelHue / 360) * 100}% - 10px)`, backgroundColor: `hsl(${modelHue}, 29%, 72%)` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Section */}
+      <div className={`mt-auto border-t border-[#1a1a1a] pt-6 shrink-0 ${!isMobile ? '' : 'pb-6'}`}>
+        <div className="flex items-center gap-6 mb-4 px-2">
+          <button onClick={resetAll} className="flex items-center gap-2 text-xs text-[#9CA3AF] hover:text-white transition-colors">
+            <div className="w-4 h-4 rounded-full border border-current flex items-center justify-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
+            </div>
+            Reset Default
+          </button>
+
+          <button className="flex items-center gap-2 text-xs text-[#9CA3AF] hover:text-white transition-colors" onClick={resetAll}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-history"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
+            Reset Saved
+          </button>
+        </div>
+
+        <button disabled className="w-full bg-[#1b1b1b] text-[#555] py-3 rounded-xl text-sm font-medium mb-8 cursor-not-allowed flex items-center justify-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-text"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" /></svg>
+          Saved
+        </button>
+
+        {/* BMI Section */}
+        <div className="px-1">
+          <div className="flex items-end justify-between mb-2">
+            <div className="text-xs text-[#6B7280] font-medium">BMI <span className="text-white text-base font-bold ml-1">{bmi.toFixed(1)}</span></div>
+            <div className="text-xs font-medium" style={{ color: bmiStatusLabel.color }}>{bmiStatusLabel.label}</div>
+          </div>
+
+          <div className="relative h-1.5 w-full rounded-full overflow-visible mb-1 flex items-center">
+            <div className="w-full h-full flex rounded-full overflow-hidden">
+              <div className="w-[20%] bg-[#60A5FA]"></div>
+              <div className="w-[30%] bg-[#34D399]"></div>
+              <div className="w-[30%] bg-[#FBBF24]"></div>
+              <div className="w-[20%] bg-[#F87171]"></div>
+            </div>
+            <div className="absolute w-2 h-2 bg-white rounded-full shadow-[0_0_5px_rgba(0,0,0,0.5)] border border-[#0f0f0f] z-10" style={{ left: `calc(${bmiPercentage}% - 4px)` }}></div>
+          </div>
+
+          <div className="relative w-full h-3 flex justify-between text-[10px] text-[#555]">
+            <span className="w-4"></span>
+            <span className="absolute left-[20%] -translate-x-1/2">18.5</span>
+            <span className="absolute left-[50%] -translate-x-1/2">25</span>
+            <span className="absolute left-[80%] -translate-x-1/2">30</span>
+            <span className="w-4"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -109,13 +340,9 @@ function DeformedMesh({
   const meshRef = useRef<THREE.Mesh>(null);
   const config = GENDER_CONFIGS[gender];
 
-  // Calculate weights for each basis using normalized SMPL stepping (per 5mm / 5.0 units)
   const weights = useMemo(() => {
     const m = measurements;
     const g = config.means;
-
-    // Weight is non-linear (cube root space). 
-    // The delta file "plus_5kg" actually represents a +5.0 change in the cube root value!
     const targetRoot = Math.pow(m.weight, 1 / 3);
     const weightStep = 5.0;
 
@@ -126,11 +353,10 @@ function DeformedMesh({
       waist: (m.waist * 10 - g.waist) / 5,
       hips: (m.hips * 10 - g.hips) / 5,
       inseam: (m.inseam * 10 - g.inseam) / 5,
-      exercise: (m.exercise - g.fitness) / 5, // already in hours
+      exercise: (m.exercise - g.fitness) / 5,
     };
   }, [measurements, config]);
 
-  // Compute final vertices based on linear combination of diffs
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
     const vertexCount = basis.mean.length;
@@ -146,7 +372,6 @@ function DeformedMesh({
       const dI = basis.diffs.inseam[i];
       const dE = basis.diffs.exercise[i];
 
-      // P = Mean + Sum(weight_i * Basis_i) // SMPL Linear Blend Shape formula
       positions[i * 3 + 0] = m[0] + (weights.stature * dS[0]) + (weights.weight * dW[0]) + (weights.chest * dC[0]) + (weights.waist * dWa[0]) + (weights.hips * dH[0]) + (weights.inseam * dI[0]) + (weights.exercise * dE[0]);
       positions[i * 3 + 1] = m[1] + (weights.stature * dS[1]) + (weights.weight * dW[1]) + (weights.chest * dC[1]) + (weights.waist * dWa[1]) + (weights.hips * dH[1]) + (weights.inseam * dI[1]) + (weights.exercise * dE[1]);
       positions[i * 3 + 2] = m[2] + (weights.stature * dS[2]) + (weights.weight * dW[2]) + (weights.chest * dC[2]) + (weights.waist * dWa[2]) + (weights.hips * dH[2]) + (weights.inseam * dI[2]) + (weights.exercise * dE[2]);
@@ -176,6 +401,7 @@ export default function CharacterView09() {
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [basis, setBasis] = useState<BasisData | null>(null);
   const [modelHue, setModelHue] = useState<number>(209);
+  const [showMobileControls, setShowMobileControls] = useState(false);
 
   // Default values matching the image
   const defaultMeasurements: Measurements = {
@@ -315,25 +541,47 @@ export default function CharacterView09() {
   );
 
   return (
-    <div className="flex w-full h-[100dvh] bg-[#050505] overflow-hidden text-neutral-300 font-sans selection:bg-neutral-800">
+    <div className="flex flex-col md:flex-row w-full h-[100dvh] bg-[#050505] overflow-hidden text-neutral-300 font-sans selection:bg-neutral-800">
+
+      {/* MOBILE BACKDROP */}
+      {showMobileControls && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
+          onClick={() => setShowMobileControls(false)}
+        />
+      )}
 
       {/* LEFT PANEL - 3D VIEWER */}
-      <div className="flex-1 relative flex flex-col">
+      <div className="flex-1 relative flex flex-col h-full min-h-0 bg-[#050505]">
         {/* Top Left Menu */}
         <div className="absolute top-6 left-6 z-10 flex flex-col gap-3">
-          <button className="flex items-center gap-2 bg-[#1b1b1b] hover:bg-[#252525] border border-[#2a2a2a] px-4 py-2 rounded-full text-xs font-medium text-white shadow-sm transition-colors cursor-pointer">
+          <button className="flex items-center gap-2 bg-[#1b1b1b] hover:bg-[#252525] border border-[#2a2a2a] px-4 py-2 rounded-full text-[10px] md:text-xs font-medium text-white shadow-sm transition-colors cursor-pointer">
             Default Body
           </button>
-          <button className="flex items-center gap-2 bg-transparent hover:bg-[#1b1b1b] border border-[#2a2a2a] px-3 py-1.5 rounded-full text-[#9CA3AF] text-xs transition-colors self-start cursor-pointer group">
-            <Plus size={14} className="text-[#9CA3AF] group-hover:text-white" /> New
+          <button className="flex items-center gap-2 bg-transparent hover:bg-[#1b1b1b] border border-[#2a2a2a] px-3 py-1.5 rounded-full text-[#9CA3AF] text-[10px] md:text-xs transition-colors self-start cursor-pointer group">
+            <Plus size={12} className="text-[#9CA3AF] group-hover:text-white md:hidden" />
+            <Plus size={14} className="text-[#9CA3AF] group-hover:text-white hidden md:block" /> New
           </button>
         </div>
 
         {/* Bottom Right Actions */}
-        <div className="absolute bottom-6 right-6 z-10 flex items-center gap-4 text-[#9CA3AF]">
-          <button className="hover:text-white transition-colors cursor-pointer"><Share2 size={20} /></button>
-          <button className="hover:text-white transition-colors cursor-pointer"><Camera size={20} /></button>
+        <div className="absolute bottom-6 md:bottom-6 right-6 z-10 flex items-center gap-4 text-[#9CA3AF]">
+          <button className="hover:text-white transition-colors cursor-pointer"><Share2 size={18} className="md:w-5 md:h-5" /></button>
+          <button className="hover:text-white transition-colors cursor-pointer"><Camera size={18} className="md:w-5 md:h-5" /></button>
         </div>
+
+        {/* Adjust Body Stats (Mobile Button) */}
+        {!showMobileControls && (
+          <div className="md:hidden absolute bottom-12 left-1/2 -translate-x-1/2 z-10 w-full px-6 max-w-sm">
+            <button
+              onClick={() => setShowMobileControls(true)}
+              className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-[#333] py-3.5 rounded-full text-sm font-medium text-white flex items-center justify-center gap-2.5 shadow-xl active:scale-95 transition-all"
+            >
+              <Sliders size={18} />
+              Adjust Body Stats
+            </button>
+          </div>
+        )}
 
         {!basis ? (
           <Loader progress={loadingStep} />
@@ -363,204 +611,62 @@ export default function CharacterView09() {
         )}
       </div>
 
-      {/* RIGHT PANEL - CONTROLS */}
-      <div className="w-[340px] shrink-0 bg-[#0f0f0f] border-l border-[#1a1a1a] flex flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.5)] z-20">
+      {/* RIGHT PANEL - CONTROLS (DESKTOP) */}
+      <div className="hidden md:flex w-[340px] shrink-0 bg-[#0f0f0f] border-l border-[#1a1a1a] flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.5)] z-20">
+        <ControlsContent
+          gender={gender}
+          setGender={setGender}
+          units={units}
+          setUnits={setUnits}
+          measurements={measurements}
+          handleUpdate={handleUpdate}
+          toDisplay={toDisplay}
+          modelHue={modelHue}
+          setModelHue={setModelHue}
+          resetAll={resetAll}
+          bmi={bmi}
+          bmiStatusLabel={bmiStatusLabel}
+          bmiPercentage={bmiPercentage}
+        />
+      </div>
 
-        <div className="p-6 flex flex-col h-full">
+      {/* MOBILE DRAWER */}
+      <div
+        className={`md:hidden fixed inset-x-0 bottom-0 z-50 bg-[#0f0f0f] border-t border-[#1a1a1a] rounded-t-[32px] shadow-[0_-20px_40px_rgba(0,0,0,0.5)] transition-transform duration-500 ease-out ${showMobileControls ? 'translate-y-0' : 'translate-y-full'
+          }`}
+        style={{ height: '75dvh' }}
+      >
+        <div className="w-full flex flex-col h-full relative">
+          {/* Pull bar / Indicator */}
+          <div className="w-12 h-1.5 bg-[#2a2a2a] rounded-full mx-auto mt-4 mb-2 shrink-0"></div>
 
-          {/* Gender Toggle */}
-          <div className="w-full bg-[#171717] rounded-xl p-1 mb-6 flex">
-            {(['female', 'male'] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => {
-                  setGender(g);
-                  // Adjust defaults when swapping if wanted. For now leaving exact values to let SMPL naturally deform.
-                }}
-                className={`flex-1 text-center py-2 text-sm font-medium rounded-lg transition-colors ${gender === g ? 'bg-[#2a2a2a] text-white shadow-sm' : 'text-[#6B7280] hover:text-[#9CA3AF]'
-                  }`}
-              >
-                {g.charAt(0).toUpperCase() + g.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          {/* Units Toggle */}
-          <div className="flex items-center mb-8 gap-4 px-1">
-            <div className="bg-[#171717] rounded-full p-1 flex items-center">
-              {(['imperial', 'metric'] as const).map((u) => (
-                <button
-                  key={u}
-                  onClick={() => setUnits(u)}
-                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize ${units === u ? 'bg-[#2a2a2a] text-white' : 'text-[#6B7280] hover:text-[#9CA3AF]'
-                    }`}
-                >
-                  {u}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Sliders Container */}
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-7 pb-4">
-            <SliderField
-              icon={<Ruler size={16} strokeWidth={2} />}
-              label="Height"
-              value={measurements.stature}
-              min={140} max={210} step={1}
-              display={toDisplay(measurements.stature, 'cm')}
-              onChange={(v) => handleUpdate('stature', v)}
-            />
-
-            <SliderField
-              icon={<Weight size={16} strokeWidth={2} />}
-              label="Weight"
-              value={measurements.weight}
-              min={40} max={160} step={1}
-              display={toDisplay(measurements.weight, 'kg')}
-              onChange={(v) => handleUpdate('weight', v)}
-            />
-
-            <SliderField
-              icon={<Heart size={16} strokeWidth={2} />}
-              label="Chest"
-              value={measurements.chest}
-              min={70} max={140} step={1}
-              display={toDisplay(measurements.chest, 'cm')}
-              onChange={(v) => handleUpdate('chest', v)}
-            />
-
-            <SliderField
-              icon={<Pencil size={16} strokeWidth={2} />}
-              label="Waist"
-              value={measurements.waist}
-              min={50} max={130} step={1}
-              display={toDisplay(measurements.waist, 'cm')}
-              onChange={(v) => handleUpdate('waist', v)}
-            />
-
-            <SliderField
-              icon={<MoveHorizontal size={16} strokeWidth={2} />}
-              label="Hips"
-              value={measurements.hips}
-              min={70} max={150} step={1}
-              display={toDisplay(measurements.hips, 'cm')}
-              onChange={(v) => handleUpdate('hips', v)}
-            />
-
-            <SliderField
-              icon={<Baseline size={16} strokeWidth={2} />}
-              label="Inseam"
-              value={measurements.inseam}
-              min={50} max={110} step={1}
-              display={toDisplay(measurements.inseam, 'cm')}
-              onChange={(v) => handleUpdate('inseam', v)}
-            />
-
-            <SliderField
-              icon={<Activity size={16} strokeWidth={2} />}
-              label="Exercise"
-              value={measurements.exercise}
-              min={0} max={20} step={1}
-              display={toDisplay(measurements.exercise, 'hr')}
-              onChange={(v) => handleUpdate('exercise', v)}
-            />
-
-            {/* Color Hue Slider */}
-            <div className="w-full flex flex-col pt-2 pb-2">
-              <div className="relative h-6 flex items-center group cursor-pointer w-[96%] mx-auto">
-                {/* Track Background */}
-                <div 
-                  className="absolute h-2.5 w-full rounded-sm overflow-hidden" 
-                  style={{ 
-                    background: 'linear-gradient(to right, hsl(0, 29%, 72%), hsl(60, 29%, 72%), hsl(120, 29%, 72%), hsl(180, 29%, 72%), hsl(240, 29%, 72%), hsl(300, 29%, 72%), hsl(360, 29%, 72%))' 
-                  }}
-                ></div>
-                {/* Invisible Range Input */}
-                <input
-                  type="range"
-                  min={0}
-                  max={360}
-                  step={1}
-                  value={modelHue}
-                  onChange={(e) => setModelHue(parseFloat(e.target.value))}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
-                />
-                {/* Custom Thumb */}
-                <div
-                  className="absolute w-5 h-5 rounded-[4px] shadow-sm pointer-events-none group-hover:scale-110 transition-transform origin-center border-[1.5px] border-[#0f0f0f]"
-                  style={{ 
-                    left: `calc(${(modelHue / 360) * 100}% - 10px)`,
-                    backgroundColor: `hsl(${modelHue}, 29%, 72%)`
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Controls */}
-          <div className="pt-6 border-t border-[#1a1a1a]">
-            <div className="flex items-center gap-6 mb-4 px-2">
-              <button
-                onClick={resetAll}
-                className="flex items-center gap-2 text-xs text-[#9CA3AF] hover:text-white transition-colors"
-              >
-                <div className="w-4 h-4 rounded-full border border-current flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
-                </div>
-                Reset Default
-              </button>
-
-              <button
-                className="flex items-center gap-2 text-xs text-[#9CA3AF] hover:text-white transition-colors"
-                onClick={resetAll}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-history"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
-                Reset Saved
-              </button>
-            </div>
-
-            <button disabled className="w-full bg-[#1b1b1b] text-[#555] py-3 rounded-xl text-sm font-medium mb-8 cursor-not-allowed flex items-center justify-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-text"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" /></svg>
-              Saved
+          <div className="flex items-center justify-between px-6 py-2 shrink-0">
+            <h2 className="text-white text-sm font-semibold">Adjust the sliders to change the body shape.</h2>
+            <button
+              onClick={() => setShowMobileControls(false)}
+              className="w-8 h-8 flex items-center justify-center bg-[#1b1b1b] rounded-full text-neutral-400"
+            >
+              <X size={18} />
             </button>
+          </div>
 
-            {/* BMI Section */}
-            <div className="px-1">
-              <div className="flex items-end justify-between mb-2">
-                <div className="text-xs text-[#6B7280] font-medium">
-                  BMI <span className="text-white text-base font-bold ml-1">{bmi.toFixed(1)}</span>
-                </div>
-                <div className="text-xs font-medium" style={{ color: bmiStatusLabel.color }}>
-                  {bmiStatusLabel.label}
-                </div>
-              </div>
-
-              <div className="relative h-1.5 w-full rounded-full overflow-visible mb-1 flex items-center">
-                {/* Scale Bar */}
-                <div className="w-full h-full flex rounded-full overflow-hidden">
-                  <div className="w-[20%] bg-[#60A5FA]"></div>
-                  <div className="w-[30%] bg-[#34D399]"></div>
-                  <div className="w-[30%] bg-[#FBBF24]"></div>
-                  <div className="w-[20%] bg-[#F87171]"></div>
-                </div>
-
-                {/* Dot indicator */}
-                <div
-                  className="absolute w-2 h-2 bg-white rounded-full shadow-[0_0_5px_rgba(0,0,0,0.5)] border border-[#0f0f0f] z-10"
-                  style={{ left: `calc(${bmiPercentage}% - 4px)` }}
-                ></div>
-              </div>
-
-              {/* Scale Ticks */}
-              <div className="relative w-full h-3 flex justify-between text-[10px] text-[#555]">
-                <span className="w-4"></span> {/* Spacer */}
-                <span className="absolute left-[20%] -translate-x-1/2">18.5</span>
-                <span className="absolute left-[50%] -translate-x-1/2">25</span>
-                <span className="absolute left-[80%] -translate-x-1/2">30</span>
-                <span className="w-4"></span> {/* Spacer */}
-              </div>
-            </div>
+          <div className="flex-1 overflow-y-auto px-6 pb-12 custom-scrollbar">
+            <ControlsContent
+              gender={gender}
+              setGender={setGender}
+              units={units}
+              setUnits={setUnits}
+              measurements={measurements}
+              handleUpdate={handleUpdate}
+              toDisplay={toDisplay}
+              modelHue={modelHue}
+              setModelHue={setModelHue}
+              resetAll={resetAll}
+              bmi={bmi}
+              bmiStatusLabel={bmiStatusLabel}
+              bmiPercentage={bmiPercentage}
+              isMobile
+            />
           </div>
         </div>
       </div>
@@ -571,72 +677,6 @@ export default function CharacterView09() {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #444; }
       `}</style>
-    </div>
-  );
-}
-
-// --- UI Sub-components ---
-
-function SliderField({
-  icon,
-  label,
-  value,
-  min,
-  max,
-  step,
-  display,
-  onChange,
-}: {
-  icon: React.ReactNode,
-  label: string,
-  value: number,
-  min: number,
-  max: number,
-  step: number,
-  display: { val: any, unit: string },
-  onChange: (v: number) => void,
-}) {
-  return (
-    <div className="w-full flex flex-col">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-3 text-[#9CA3AF]">
-          {icon}
-          <span className="text-[13px] font-medium">{label}</span>
-        </div>
-        <div className="flex items-baseline gap-1">
-          <span className="text-white text-sm font-bold">{display.val}</span>
-          <span className="text-[#6B7280] text-[10px]">{display.unit}</span>
-        </div>
-      </div>
-
-      {/* Visual Slider */}
-      <div className="relative h-4 flex items-center group cursor-pointer w-[96%] mx-auto">
-        {/* Track Background */}
-        <div className="absolute h-1 w-full bg-[#1b1b1b] rounded-full overflow-hidden">
-          {/* Active Fill */}
-          <div
-            className="h-full bg-white transition-transform origin-left"
-            style={{ transform: `scaleX(${(value - min) / (max - min)})` }}
-          />
-        </div>
-
-        {/* Invisible Range Input */}
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
-        />
-
-        {/* Custom Thumb */}
-        <div
-          className="absolute w-[18px] h-[18px] bg-white rounded-full shadow-md pointer-events-none group-hover:scale-110 transition-transform origin-center"
-          style={{ left: `calc(${((value - min) / (max - min)) * 100}% - 9px)` }}
-        />
-      </div>
     </div>
   );
 }
